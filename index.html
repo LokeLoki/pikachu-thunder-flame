@@ -1,0 +1,837 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Pikachu vs Charizard — Thunder & Flame</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; background: #000; overflow: hidden; font-family: 'Segoe UI', system-ui, sans-serif; }
+  #stage { position: relative; width: 100vw; height: 100vh; display: flex; align-items: center; justify-content: center; }
+  canvas { display: block; width: 100%; height: 100%; }
+
+  /* cinematic letterbox bars */
+  .bar { position: absolute; left: 0; width: 100%; height: 7vh; background: #000; z-index: 5; transition: transform 1.2s cubic-bezier(.7,0,.3,1); }
+  #bar-top { top: 0; } #bar-bot { bottom: 0; }
+  .bars-open #bar-top { transform: translateY(-100%); }
+  .bars-open #bar-bot { transform: translateY(100%); }
+
+  /* title card */
+  #title-card { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10; background: radial-gradient(ellipse at center, #1a0e2e 0%, #050208 75%); transition: opacity 1.6s ease; }
+  #title-card h1 { font-size: clamp(28px, 5.2vw, 76px); font-weight: 900; letter-spacing: .12em; color: #fff; text-shadow: 0 0 30px rgba(255,210,60,.55), 0 0 80px rgba(255,120,30,.35); animation: pulseTitle 2.4s ease-in-out infinite; }
+  #title-card h1 .vs { color: #ff5a3c; text-shadow: 0 0 24px rgba(255,90,60,.9); padding: 0 .25em; }
+  #title-card .sub { margin-top: 18px; color: #cbb8ff; letter-spacing: .55em; font-size: clamp(10px, 1.4vw, 18px); text-transform: uppercase; opacity: .85; }
+  #title-card .begin { margin-top: 44px; padding: 14px 44px; font-size: 15px; letter-spacing: .3em; text-transform: uppercase; color: #ffe9a8; background: transparent; border: 1px solid rgba(255,220,120,.55); border-radius: 999px; cursor: pointer; transition: all .3s; }
+  #title-card .begin:hover { background: rgba(255,210,80,.14); box-shadow: 0 0 34px rgba(255,200,60,.35); border-color: rgba(255,220,120,.9); }
+  @keyframes pulseTitle { 0%,100% { transform: scale(1); filter: brightness(1);} 50% { transform: scale(1.025); filter: brightness(1.18);} }
+
+  /* announcer callouts */
+  #callout { position: absolute; left: 50%; top: 16%; transform: translate(-50%, -50%) scale(.4); z-index: 8; font-size: clamp(26px, 4.6vw, 64px); font-weight: 900; letter-spacing: .14em; color: #fff; text-shadow: 0 0 26px currentColor; opacity: 0; pointer-events: none; white-space: nowrap; transition: none; }
+  #callout.show { animation: callout 1.5s cubic-bezier(.16,1,.3,1) forwards; }
+  @keyframes callout {
+    0%   { opacity: 0; transform: translate(-50%,-50%) scale(2.6); filter: blur(14px); }
+    18%  { opacity: 1; transform: translate(-50%,-50%) scale(1); filter: blur(0); }
+    78%  { opacity: 1; transform: translate(-50%,-50%) scale(1.04); }
+    100% { opacity: 0; transform: translate(-50%,-50%) scale(1.12); filter: blur(6px); }
+  }
+
+  /* end card */
+  #endcard { position: absolute; inset: 0; z-index: 11; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(4,2,10,.78); opacity: 0; pointer-events: none; transition: opacity 1.4s ease; }
+  #endcard.show { opacity: 1; pointer-events: auto; }
+  #endcard h2 { font-size: clamp(34px, 6vw, 92px); font-weight: 900; letter-spacing: .1em; color: #fff; text-shadow: 0 0 40px rgba(255,215,80,.8); }
+  #endcard p { margin-top: 14px; color: #b9a9e0; letter-spacing: .4em; text-transform: uppercase; font-size: clamp(10px,1.3vw,16px); }
+  #endcard button { margin-top: 40px; padding: 13px 40px; letter-spacing: .28em; text-transform: uppercase; font-size: 14px; color: #ffe9a8; background: transparent; border: 1px solid rgba(255,220,120,.55); border-radius: 999px; cursor: pointer; transition: all .3s; }
+  #endcard button:hover { background: rgba(255,210,80,.14); box-shadow: 0 0 30px rgba(255,200,60,.35); }
+
+  #hint { position: absolute; bottom: 9.5vh; left: 50%; transform: translateX(-50%); z-index: 6; color: rgba(255,255,255,.35); font-size: 12px; letter-spacing: .25em; text-transform: uppercase; pointer-events: none; }
+  #mute { position: absolute; top: 9vh; right: 14px; z-index: 12; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.18); color: rgba(255,255,255,.6); width: 38px; height: 38px; border-radius: 50%; cursor: pointer; font-size: 15px; }
+  #mute:hover { background: rgba(255,255,255,.14); }
+</style>
+</head>
+<body>
+<div id="stage">
+  <canvas id="cv" width="1600" height="900"></canvas>
+  <div class="bar" id="bar-top"></div>
+  <div class="bar" id="bar-bot"></div>
+  <div id="title-card">
+    <h1>PIKACHU <span class="vs">VS</span> CHARIZARD</h1>
+    <div class="sub">Thunder &amp; Flame — A Cinematic Duel</div>
+    <button class="begin" id="btn-begin">Begin</button>
+  </div>
+  <div id="callout"></div>
+  <div id="hint">click / tap anytime — sound on for the full experience</div>
+  <button id="mute" title="mute">🔊</button>
+  <div id="endcard">
+    <h2 id="end-title">THE STORM PREVAILS</h2>
+    <p id="end-sub">pikachu wins</p>
+    <button id="btn-again">Run It Back</button>
+  </div>
+</div>
+
+<script>
+(() => {
+'use strict';
+const cv = document.getElementById('cv');
+const ctx = cv.getContext('2d');
+const W = cv.width, H = cv.height;
+const GROUND = H * 0.78;
+
+/* ============================== AUDIO (synth, no files) ============================== */
+let AC = null, muted = false;
+function audio() { if (!AC) { try { AC = new (window.AudioContext || window.webkitAudioContext)(); } catch(e){} } if (AC && AC.state === 'suspended') AC.resume(); return AC; }
+function tone(freq, dur, type='sine', vol=0.12, slide=0) {
+  const a = audio(); if (!a || muted) return;
+  const o = a.createOscillator(), g = a.createGain();
+  o.type = type; o.frequency.setValueAtTime(freq, a.currentTime);
+  if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(30, freq + slide), a.currentTime + dur);
+  g.gain.setValueAtTime(vol, a.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.0001, a.currentTime + dur);
+  o.connect(g).connect(a.destination); o.start(); o.stop(a.currentTime + dur);
+}
+function noiseBurst(dur, vol=0.2, freq=800) {
+  const a = audio(); if (!a || muted) return;
+  const len = a.sampleRate * dur, buf = a.createBuffer(1, len, a.sampleRate), d = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) d[i] = (Math.random()*2-1) * (1 - i/len);
+  const src = a.createBufferSource(); src.buffer = buf;
+  const f = a.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = freq;
+  const g = a.createGain(); g.gain.setValueAtTime(vol, a.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.0001, a.currentTime + dur);
+  src.connect(f).connect(g).connect(a.destination); src.start();
+}
+const SFX = {
+  thunder: () => { noiseBurst(1.4, 0.5, 300); tone(50, 1.2, 'sine', 0.3, -25); },
+  roar:    () => { tone(140, 0.8, 'sawtooth', 0.16, -70); noiseBurst(0.7, 0.2, 500); },
+  zap:     () => { tone(1400, 0.35, 'sawtooth', 0.14, -1200); noiseBurst(0.3, 0.25, 3500); },
+  flame:   () => { noiseBurst(0.9, 0.28, 900); tone(90, 0.8, 'triangle', 0.12, 30); },
+  hit:     () => { tone(70, 0.5, 'square', 0.22, -40); noiseBurst(0.4, 0.35, 700); },
+  charge:  () => { tone(200, 1.4, 'sine', 0.07, 700); },
+  clash:   () => { tone(60, 1.2, 'sawtooth', 0.3, -30); noiseBurst(1.2, 0.5, 1200); },
+  win:     () => { [523,659,784,1046].forEach((f,i)=>setTimeout(()=>tone(f,0.5,'triangle',0.14),i*160)); }
+};
+
+/* ============================== CAMERA ============================== */
+const cam = { x: 0, y: 0, zoom: 1, shake: 0, flash: 0, flashColor: '#fff' };
+function shake(n) { cam.shake = Math.max(cam.shake, n); }
+function flash(color, n) { cam.flashColor = color || '#fff'; cam.flash = Math.max(cam.flash, n); }
+
+/* ============================== PARTICLES ============================== */
+let particles = [];
+function spawn(n, opts) {
+  for (let i = 0; i < n; i++) {
+    const a = (opts.angle !== undefined ? opts.angle : Math.random()*Math.PI*2) + (Math.random()-0.5)*(opts.spread||0.6);
+    const s = (opts.speed||3) * (0.4 + Math.random()*1.2);
+    particles.push({
+      x: opts.x + (Math.random()-0.5)*(opts.size0||0),
+      y: opts.y + (Math.random()-0.5)*(opts.size0||0),
+      vx: Math.cos(a)*s + (opts.vx||0), vy: Math.sin(a)*s + (opts.vy||0),
+      g: opts.g||0, drag: opts.drag||0.98,
+      life: 0, maxLife: (opts.life||40) * (0.6 + Math.random()*0.8),
+      size: (opts.size||4) * (0.5 + Math.random()),
+      color: opts.color, glow: opts.glow, grav: opts.g||0
+    });
+  }
+}
+function updateParticles() {
+  for (let i = particles.length-1; i >= 0; i--) {
+    const p = particles[i];
+    p.life++;
+    p.vy += p.grav; p.vx *= p.drag; p.vy *= p.drag;
+    p.x += p.vx; p.y += p.vy;
+    if (p.life > p.maxLife) particles.splice(i,1);
+  }
+  if (particles.length > 900) particles.splice(0, particles.length - 900);
+}
+function drawParticles() {
+  for (const p of particles) {
+    const t = 1 - p.life/p.maxLife;
+    ctx.globalAlpha = t;
+    ctx.fillStyle = p.color;
+    if (p.glow) { ctx.shadowColor = p.color; ctx.shadowBlur = 14; }
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.size * (0.4 + 0.6*t), 0, Math.PI*2);
+    ctx.fill();
+  }
+  ctx.shadowBlur = 0; ctx.globalAlpha = 1;
+}
+
+/* ============================== LIGHTNING BOLTS ============================== */
+let bolts = [];
+function makeBolt(x1, y1, x2, y2, branches) {
+  const pts = [[x1, y1]];
+  let x = x1, y = y1;
+  const steps = 14;
+  for (let i = 1; i <= steps; i++) {
+    x = x1 + (x2-x1) * i/steps + (Math.random()-0.5) * 60;
+    y = y1 + (y2-y1) * i/steps + (Math.random()-0.5) * 30;
+    pts.push([x, y]);
+    if (branches && Math.random() < 0.3 && i < steps) {
+      const bpts = [[x, y]];
+      let bx = x, by = y;
+      for (let j = 0; j < 4; j++) { bx += (Math.random()-0.5)*90; by += (Math.random()-0.2)*60; bpts.push([bx,by]); }
+      bolts.push({ pts: bpts, life: 0, maxLife: 12, w: 2 });
+    }
+  }
+  bolts.push({ pts, life: 0, maxLife: 14, w: 4 });
+}
+function drawBolts() {
+  for (let i = bolts.length-1; i >= 0; i--) {
+    const b = bolts[i]; b.life++;
+    const a = 1 - b.life/b.maxLife;
+    if (a <= 0) { bolts.splice(i,1); continue; }
+    ctx.strokeStyle = `rgba(210,240,255,${a})`;
+    ctx.lineWidth = b.w;
+    ctx.shadowColor = '#8fd8ff'; ctx.shadowBlur = 26;
+    ctx.beginPath();
+    b.pts.forEach((p, j) => j ? ctx.lineTo(p[0],p[1]) : ctx.moveTo(p[0],p[1]));
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+  }
+}
+
+/* ============================== SKY / BACKGROUND ============================== */
+let clouds = [], embers = [], rain = [];
+for (let i = 0; i < 9; i++) clouds.push({ x: Math.random()*W, y: 60 + Math.random()*260, w: 220 + Math.random()*340, s: 0.12 + Math.random()*0.2, puffs: 4 + (Math.random()*3|0) });
+for (let i = 0; i < 40; i++) embers.push({ x: Math.random()*W, y: Math.random()*H, vy: -(0.3+Math.random()*0.7), vx: (Math.random()-0.5)*0.4, r: 1+Math.random()*2.5, ph: Math.random()*7 });
+for (let i = 0; i < 90; i++) rain.push({ x: Math.random()*W, y: Math.random()*H, l: 10+Math.random()*14, s: 9+Math.random()*7 });
+let stormPulse = 0;
+
+function drawSky(t) {
+  // base gradient — bruised storm
+  let g = ctx.createLinearGradient(0, 0, 0, GROUND);
+  g.addColorStop(0, '#0b0618');
+  g.addColorStop(0.5, '#241233');
+  g.addColorStop(0.85, '#3d1c2e');
+  g.addColorStop(1, '#57231c');
+  ctx.fillStyle = g;
+  ctx.fillRect(-W*0.1, -H*0.1, W*1.2, H*1.2);
+
+  // storm glow pulses (lightning ambience)
+  stormPulse = Math.max(0, stormPulse - 0.02);
+  if (Math.random() < 0.006) { stormPulse = 0.5 + Math.random()*0.5; SFX.thunder && (Math.random()<0.4 ? SFX.thunder() : 0); }
+  if (stormPulse > 0.02) {
+    ctx.fillStyle = `rgba(180,200,255,${stormPulse*0.16})`;
+    ctx.fillRect(-W*0.1, -H*0.1, W*1.2, H*1.2);
+    const sx = Math.random()*W;
+    makeBolt(sx, -20, sx + (Math.random()-0.5)*200, GROUND*0.5, true);
+  }
+
+  // sun / fire horizon glow behind charizard side
+  const fg = ctx.createRadialGradient(W*0.8, GROUND*0.75, 40, W*0.8, GROUND*0.75, W*0.55);
+  fg.addColorStop(0, 'rgba(255,120,30,0.30)');
+  fg.addColorStop(1, 'rgba(255,120,30,0)');
+  ctx.fillStyle = fg; ctx.fillRect(0,0,W,H);
+  // electric glow behind pikachu side
+  const eg = ctx.createRadialGradient(W*0.2, GROUND*0.75, 40, W*0.2, GROUND*0.75, W*0.5);
+  eg.addColorStop(0, 'rgba(255,225,90,0.16)');
+  eg.addColorStop(1, 'rgba(255,225,90,0)');
+  ctx.fillStyle = eg; ctx.fillRect(0,0,W,H);
+
+  // clouds
+  for (const c of clouds) {
+    c.x += c.s; if (c.x - c.w > W) c.x = -c.w;
+    ctx.fillStyle = 'rgba(20,12,34,0.75)';
+    for (let p = 0; p < c.puffs; p++) {
+      const px = c.x + p * (c.w / c.puffs) * 0.6, py = c.y + Math.sin(p*2.1 + t*0.0004)*10;
+      const pr = c.w * 0.22 * (0.7 + 0.3*Math.sin(p*1.7));
+      ctx.beginPath(); ctx.ellipse(px, py, pr, pr*0.45, 0, 0, Math.PI*2); ctx.fill();
+    }
+  }
+
+  // distant mountain silhouettes
+  ctx.fillStyle = '#120a1e';
+  ctx.beginPath(); ctx.moveTo(-W*0.1, GROUND);
+  for (let x = -W*0.1; x <= W*1.1; x += 80) {
+    ctx.lineTo(x, GROUND - 90 - Math.sin(x*0.004)*70 - Math.sin(x*0.011)*40);
+  }
+  ctx.lineTo(W*1.1, GROUND); ctx.closePath(); ctx.fill();
+
+  // ground
+  const gg = ctx.createLinearGradient(0, GROUND, 0, H);
+  gg.addColorStop(0, '#2a1420'); gg.addColorStop(1, '#0c0610');
+  ctx.fillStyle = gg; ctx.fillRect(-W*0.1, GROUND, W*1.2, H - GROUND + H*0.1);
+  ctx.strokeStyle = 'rgba(255,150,80,0.15)'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(-W*0.1, GROUND); ctx.lineTo(W*1.1, GROUND); ctx.stroke();
+
+  // rising embers
+  for (const e of embers) {
+    e.y += e.vy; e.x += e.vx + Math.sin(t*0.001 + e.ph)*0.3;
+    if (e.y < -10) { e.y = H + 10; e.x = Math.random()*W; }
+    ctx.globalAlpha = 0.35 + 0.3*Math.sin(t*0.003 + e.ph);
+    ctx.fillStyle = '#ff9a4d';
+    ctx.beginPath(); ctx.arc(e.x, e.y, e.r, 0, Math.PI*2); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+
+  // rain
+  ctx.strokeStyle = 'rgba(160,180,255,0.18)'; ctx.lineWidth = 1;
+  for (const r of rain) {
+    r.x -= r.s*0.35; r.y += r.s;
+    if (r.y > GROUND) { r.y = -20; r.x = Math.random()*(W+200); }
+    ctx.beginPath(); ctx.moveTo(r.x, r.y); ctx.lineTo(r.x - r.l*0.35, r.y + r.l); ctx.stroke();
+  }
+}
+
+/* ============================== PIKACHU (vector, canvas-drawn) ============================== */
+const pikachu = {
+  x: W*0.24, y: GROUND, baseX: W*0.24, baseY: GROUND,
+  scale: 1.5, facing: 1, state: 'idle',
+  charge: 0,           // 0..1 energy build
+  hitT: 0,             // hit reaction timer
+  koT: 0,              // knockback
+  vx: 0, vy: 0, onGround: true,
+  earFlick: 0
+};
+function drawPikachu(t, p) {
+  ctx.save();
+  ctx.translate(p.x, p.y);
+  const s = p.scale;
+  ctx.scale(s * p.facing, s);
+  if (p.hitT > 0) { ctx.rotate((Math.random()-0.5)*0.08*p.hitT/10); }
+
+  const bob = Math.sin(t*0.003)*3;
+  const chargeGlow = p.charge;
+
+  // ground shadow
+  ctx.save(); ctx.scale(1/p.facing, 1);
+  ctx.fillStyle = 'rgba(0,0,0,0.35)';
+  ctx.beginPath(); ctx.ellipse(0, 4, 46, 12, 0, 0, Math.PI*2); ctx.fill();
+  ctx.restore();
+
+  ctx.shadowColor = `rgba(255,235,80,${0.25 + chargeGlow*0.75})`;
+  ctx.shadowBlur = 12 + chargeGlow*40;
+
+  const body = '#ffe14d', bodyDark = '#e8b923', brown = '#6b4a12';
+
+  // tail (lightning bolt) — flicks when charging
+  ctx.fillStyle = body;
+  ctx.beginPath();
+  const tf = Math.sin(t*0.006 + chargeGlow*8) * (4 + chargeGlow*10);
+  ctx.moveTo(-20, -18);
+  ctx.lineTo(-52, -48 + tf*0.3);
+  ctx.lineTo(-34, -46 + tf*0.4);
+  ctx.lineTo(-58, -78 + tf*0.5);
+  ctx.lineTo(-26, -56 + tf*0.3);
+  ctx.lineTo(-38, -52 + tf*0.2);
+  ctx.lineTo(-16, -30);
+  ctx.closePath(); ctx.fill();
+  ctx.fillStyle = brown;
+  ctx.beginPath();
+  ctx.moveTo(-52, -48 + tf*0.3); ctx.lineTo(-58, -78 + tf*0.5); ctx.lineTo(-40, -64 + tf*0.4); ctx.closePath(); ctx.fill();
+
+  // legs
+  ctx.fillStyle = body;
+  ctx.beginPath(); ctx.ellipse(-14, -8, 11, 9, 0, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(14, -8, 11, 9, 0, 0, Math.PI*2); ctx.fill();
+
+  // body
+  ctx.fillStyle = body;
+  ctx.beginPath(); ctx.ellipse(0, -32 + bob, 30, 27, 0, 0, Math.PI*2); ctx.fill();
+  // back stripes
+  ctx.fillStyle = bodyDark;
+  ctx.beginPath(); ctx.ellipse(-18, -30 + bob, 10, 5, -0.5, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(-16, -20 + bob, 10, 5, -0.5, 0, Math.PI*2); ctx.fill();
+
+  // head
+  ctx.fillStyle = body;
+  ctx.beginPath(); ctx.ellipse(6, -66 + bob, 26, 24, 0, 0, Math.PI*2); ctx.fill();
+
+  // ears
+  const earWig = Math.sin(t*0.004)*0.06 + (p.earFlick > 0 ? Math.sin(t*0.05)*0.15 : 0);
+  ctx.save();
+  ctx.translate(-4, -84 + bob); ctx.rotate(-0.35 + earWig);
+  ctx.fillStyle = body;
+  ctx.beginPath(); ctx.moveTo(0, 0); ctx.quadraticCurveTo(-8, -34, 2, -46); ctx.quadraticCurveTo(12, -30, 10, -2); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = brown;
+  ctx.beginPath(); ctx.moveTo(-3, -30); ctx.quadraticCurveTo(-6, -40, 2, -46); ctx.quadraticCurveTo(9, -36, 7, -30); ctx.closePath(); ctx.fill();
+  ctx.restore();
+  ctx.save();
+  ctx.translate(20, -82 + bob); ctx.rotate(0.45 - earWig);
+  ctx.fillStyle = body;
+  ctx.beginPath(); ctx.moveTo(0, 0); ctx.quadraticCurveTo(6, -34, 18, -44); ctx.quadraticCurveTo(16, -26, 8, -2); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = brown;
+  ctx.beginPath(); ctx.moveTo(9, -28); ctx.quadraticCurveTo(13, -38, 18, -44); ctx.quadraticCurveTo(17, -32, 13, -28); ctx.closePath(); ctx.fill();
+  ctx.restore();
+
+  // eyes
+  const blink = (Math.sin(t*0.0011) > 0.995) ? 0.15 : 1;
+  ctx.fillStyle = '#241a10';
+  ctx.beginPath(); ctx.ellipse(14, -70 + bob, 4.4, 4.4*blink, 0, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(26, -70 + bob, 4.4, 4.4*blink, 0, 0, Math.PI*2); ctx.fill();
+  if (blink > 0.5) {
+    ctx.fillStyle = '#fff';
+    ctx.beginPath(); ctx.arc(15.4, -71.5 + bob, 1.6, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(27.4, -71.5 + bob, 1.6, 0, Math.PI*2); ctx.fill();
+  }
+  // nose
+  ctx.fillStyle = '#3a2a14';
+  ctx.beginPath(); ctx.ellipse(30, -62 + bob, 1.8, 1.4, 0, 0, Math.PI*2); ctx.fill();
+  // mouth — grin, wider when charging
+  ctx.strokeStyle = '#3a2a14'; ctx.lineWidth = 1.6;
+  ctx.beginPath(); ctx.arc(24, -58 + bob, 4 + chargeGlow*3, 0.2, Math.PI*0.85); ctx.stroke();
+
+  // cheeks — glow hard when charging
+  const chGlow = 0.55 + chargeGlow*0.45;
+  ctx.fillStyle = `rgba(255,90,70,${chGlow})`;
+  ctx.shadowColor = `rgba(255,80,60,${chargeGlow})`; ctx.shadowBlur = 8 + chargeGlow*30;
+  ctx.beginPath(); ctx.ellipse(4, -60 + bob, 6.5, 5.5, 0, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(28, -58 + bob, 6.5, 5.5, 0, 0, Math.PI*2); ctx.fill();
+  ctx.shadowBlur = 0;
+
+  // arms — raised when charging
+  ctx.fillStyle = body;
+  const armUp = chargeGlow;
+  ctx.save(); ctx.translate(18, -38 + bob); ctx.rotate(-0.7 - armUp*0.9);
+  ctx.beginPath(); ctx.ellipse(10, 0, 12, 7, 0.4, 0, Math.PI*2); ctx.fill(); ctx.restore();
+  ctx.save(); ctx.translate(-14, -36 + bob); ctx.rotate(0.7 + armUp*0.9);
+  ctx.beginPath(); ctx.ellipse(-10, 0, 12, 7, -0.4, 0, Math.PI*2); ctx.fill(); ctx.restore();
+
+  ctx.restore();
+}
+
+/* ============================== CHARIZARD ============================== */
+const charizard = {
+  x: W*0.76, y: GROUND, baseX: W*0.76, baseY: GROUND,
+  scale: 1.35, facing: -1, state: 'idle',
+  charge: 0, hitT: 0, koT: 0, vx: 0, vy: 0, onGround: true,
+  wing: 0, fire: 0
+};
+function drawCharizard(t, c) {
+  ctx.save();
+  ctx.translate(c.x, c.y);
+  ctx.scale(c.scale * c.facing, c.scale);
+  if (c.hitT > 0) ctx.rotate((Math.random()-0.5)*0.06*c.hitT/10);
+
+  const bob = Math.sin(t*0.0026 + 2)*3;
+  const chg = c.charge;
+  const orange = '#f97316', orangeD = '#d3540a', cream = '#fde8c8', green = '#22c55e';
+
+  // shadow
+  ctx.save(); ctx.scale(1/c.facing,1);
+  ctx.fillStyle = 'rgba(0,0,0,0.35)';
+  ctx.beginPath(); ctx.ellipse(0, 4, 62, 13, 0, 0, Math.PI*2); ctx.fill();
+  ctx.restore();
+
+  ctx.shadowColor = `rgba(255,130,40,${0.2 + chg*0.7})`;
+  ctx.shadowBlur = 12 + chg*44;
+
+  // tail with flame
+  const tw = Math.sin(t*0.003)*0.15;
+  ctx.strokeStyle = orange; ctx.lineWidth = 12; ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(-26, -30 + bob);
+  ctx.quadraticCurveTo(-70, -50 + bob + tw*20, -86, -95 + bob + tw*30);
+  ctx.stroke();
+  // tail flame — bigger when charging
+  const fl = 1 + chg*1.6;
+  for (let i = 0; i < 3; i++) {
+    const fa = Math.sin(t*0.02 + i*2.1)*0.25;
+    ctx.fillStyle = i===0 ? '#ffdd44' : i===1 ? '#ff8c1a' : '#ff4d1a';
+    ctx.beginPath();
+    ctx.moveTo(-86, -95 + bob + tw*30);
+    ctx.quadraticCurveTo(-96 - 10*i, -115 - 12*i*fl + fa*10, -86 - 6*i, -128 - 16*i*fl + fa*14);
+    ctx.quadraticCurveTo(-76 - 4*i, -112 - 10*i*fl + fa*8, -86, -95 + bob + tw*30);
+    ctx.fill();
+  }
+
+  // legs
+  ctx.fillStyle = orange;
+  ctx.beginPath(); ctx.ellipse(-14, -10, 13, 11, 0, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(18, -10, 13, 11, 0, 0, Math.PI*2); ctx.fill();
+  // claws
+  ctx.fillStyle = '#fff';
+  [[-22,-4],[-10,-4],[10,-4],[26,-4]].forEach(([cx,cy]) => { ctx.beginPath(); ctx.ellipse(cx, cy, 3.4, 2.6, 0, 0, Math.PI*2); ctx.fill(); });
+
+  // body
+  ctx.fillStyle = orange;
+  ctx.beginPath(); ctx.ellipse(0, -44 + bob, 36, 30, 0, 0, Math.PI*2); ctx.fill();
+  // belly
+  ctx.fillStyle = cream;
+  ctx.beginPath(); ctx.ellipse(8, -38 + bob, 22, 20, 0, 0, Math.PI*2); ctx.fill();
+
+  // wing — flaps
+  c.wing = Math.sin(t*0.006)*0.35 + chg*0.5*Math.sin(t*0.02);
+  ctx.save();
+  ctx.translate(-18, -62 + bob);
+  ctx.rotate(-0.5 + c.wing);
+  ctx.fillStyle = orange;
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  ctx.quadraticCurveTo(-70, -46, -118, -34);
+  ctx.quadraticCurveTo(-86, -12, -112, 4);
+  ctx.quadraticCurveTo(-70, 0, -64, 16);
+  ctx.quadraticCurveTo(-30, 8, 0, 12);
+  ctx.closePath(); ctx.fill();
+  // green wing membranes
+  ctx.fillStyle = green;
+  ctx.beginPath();
+  ctx.moveTo(-6, 2);
+  ctx.quadraticCurveTo(-62, -34, -104, -28);
+  ctx.quadraticCurveTo(-72, -6, -96, 4);
+  ctx.quadraticCurveTo(-56, 2, -52, 12);
+  ctx.closePath(); ctx.fill();
+  ctx.restore();
+
+  // neck + head
+  ctx.fillStyle = orange;
+  ctx.beginPath();
+  ctx.moveTo(10, -66 + bob);
+  ctx.quadraticCurveTo(34, -84 + bob, 40, -98 + bob);
+  ctx.lineTo(16, -104 + bob);
+  ctx.quadraticCurveTo(2, -84 + bob, -6, -66 + bob);
+  ctx.closePath(); ctx.fill();
+  // head
+  ctx.save();
+  ctx.translate(40, -104 + bob);
+  ctx.rotate(0.12);
+  ctx.fillStyle = orange;
+  ctx.beginPath(); ctx.ellipse(8, 0, 20, 15, 0, 0, Math.PI*2); ctx.fill();
+  // snout
+  ctx.beginPath(); ctx.ellipse(26, 4, 11, 8, 0, 0, Math.PI*2); ctx.fill();
+  // jaw open when roaring/charging
+  const jaw = 0.15 + chg*0.5;
+  ctx.save(); ctx.translate(20, 8); ctx.rotate(jaw);
+  ctx.fillStyle = orangeD;
+  ctx.beginPath(); ctx.ellipse(9, 3, 12, 5.5, 0, 0, Math.PI*2); ctx.fill();
+  ctx.restore();
+  // horn
+  ctx.fillStyle = '#e8d9b0';
+  ctx.beginPath(); ctx.moveTo(-4, -10); ctx.quadraticCurveTo(-16, -26, -26, -30); ctx.quadraticCurveTo(-14, -14, -12, -6); ctx.closePath(); ctx.fill();
+  // eye — fierce
+  ctx.fillStyle = chg > 0.5 ? '#ff3b1a' : '#1c1006';
+  ctx.beginPath(); ctx.ellipse(8, -4, 4.6, 5, 0, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#fff';
+  ctx.beginPath(); ctx.arc(9.4, -5.4, 1.5, 0, Math.PI*2); ctx.fill();
+  // brow
+  ctx.strokeStyle = '#8a3c0a'; ctx.lineWidth = 2.5;
+  ctx.beginPath(); ctx.moveTo(1, -10); ctx.lineTo(15, -7); ctx.stroke();
+  ctx.restore();
+
+  // arms
+  ctx.fillStyle = orange;
+  const armUp = chg;
+  ctx.save(); ctx.translate(22, -52 + bob); ctx.rotate(-0.5 - armUp*1.0);
+  ctx.beginPath(); ctx.ellipse(12, 0, 14, 8, 0.5, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#fff';
+  ctx.beginPath(); ctx.ellipse(23, 5, 4, 3, 0.5, 0, Math.PI*2); ctx.fill();
+  ctx.restore();
+
+  ctx.restore();
+}
+
+/* ============================== ATTACKS ============================== */
+let beams = [];   // {type:'flame'|'bolt', x,y, tx,ty, t, dur, done}
+function drawBeams(t) {
+  for (let i = beams.length-1; i >= 0; i--) {
+    const b = beams[i]; b.t++;
+    const k = b.t / b.dur;
+    if (k >= 1) { beams.splice(i,1); continue; }
+    const prog = Math.min(1, k*2.2);               // tip advances fast
+    const tipX = b.x + (b.tx - b.x)*prog, tipY = b.y + (b.ty - b.y)*prog;
+    const lifeK = k < 0.75 ? 1 : (1-k)/0.25;        // fade out tail
+
+    if (b.type === 'flame') {
+      // layered fire stream
+      for (let layer = 3; layer >= 1; layer--) {
+        const wdt = 26*layer*0.55 * lifeK;
+        const col = layer===3 ? 'rgba(255,70,20,' : layer===2 ? 'rgba(255,150,30,' : 'rgba(255,235,120,';
+        ctx.strokeStyle = col + (0.5*lifeK) + ')';
+        ctx.lineCap = 'round'; ctx.lineWidth = wdt;
+        ctx.shadowColor = '#ff6a1a'; ctx.shadowBlur = 30;
+        ctx.beginPath(); ctx.moveTo(b.x, b.y);
+        // wavy stream
+        ctx.quadraticCurveTo(
+          (b.x+tipX)/2 + Math.sin(t*0.05)*14, (b.y+tipY)/2 + Math.cos(t*0.045)*14, tipX, tipY);
+        ctx.stroke();
+      }
+      ctx.shadowBlur = 0;
+      // flame tip burst
+      spawn(3, { x: tipX, y: tipY, color: Math.random()<0.5?'#ffb347':'#ff6a2a', speed: 2, life: 22, size: 7, g: 0.02, glow: true });
+    } else {
+      // electric beam — jagged, flickering
+      for (let layer = 2; layer >= 1; layer--) {
+        ctx.strokeStyle = layer===2 ? `rgba(255,255,190,${0.9*lifeK})` : `rgba(120,200,255,${0.5*lifeK})`;
+        ctx.lineWidth = (layer===2 ? 7 : 16) * lifeK;
+        ctx.lineCap = 'round';
+        ctx.shadowColor = '#ffe97a'; ctx.shadowBlur = 34;
+        ctx.beginPath();
+        const segs = 10;
+        for (let sIdx = 0; sIdx <= segs*prog; sIdx++) {
+          const pk = sIdx/segs;
+          const px = b.x + (tipX-b.x)*pk + (Math.random()-0.5)*18*layer;
+          const py = b.y + (tipY-b.y)*pk + (Math.random()-0.5)*18*layer;
+          sIdx ? ctx.lineTo(px,py) : ctx.moveTo(px,py);
+        }
+        ctx.stroke();
+      }
+      ctx.shadowBlur = 0;
+      spawn(3, { x: tipX, y: tipY, color: '#eaffff', speed: 4, life: 16, size: 4, glow: true });
+      if (Math.random() < 0.25) makeBolt(tipX, tipY, tipX + (Math.random()-0.5)*160, tipY + (Math.random()-0.5)*160, false);
+    }
+  }
+}
+
+/* ============================== SCENE / TIMELINE ============================== */
+let scene = 'title';   // title → intro → faceoff → atk1 → atk2 → atk3 → clash → finale → end
+let scT = 0;           // scene time (frames)
+let frame = 0;
+const calloutEl = document.getElementById('callout');
+let calloutTimer = null;
+function callout(text, color) {
+  calloutEl.textContent = text;
+  calloutEl.style.color = color || '#fff';
+  calloutEl.classList.remove('show');
+  void calloutEl.offsetWidth;
+  calloutEl.classList.add('show');
+}
+
+function setScene(s) { scene = s; scT = 0; }
+
+function resetFighters() {
+  Object.assign(pikachu, { x: pikachu.baseX, y: pikachu.baseY, charge: 0, hitT: 0, koT: 0, vx: 0, vy: 0, onGround: true, facing: 1 });
+  Object.assign(charizard, { x: charizard.baseX, y: charizard.baseY, charge: 0, hitT: 0, koT: 0, vx: 0, vy: 0, onGround: true, facing: -1 });
+  particles = []; bolts = []; beams = [];
+  cam.zoom = 1; cam.x = 0; cam.y = 0; cam.shake = 0; cam.flash = 0;
+}
+
+/* scene scripting — each scene runs its logic per frame */
+const F = {
+  intro() {
+    // fighters launch in from offscreen
+    if (scT === 1) { callout('Kanto Arena — Night', '#cbb8ff'); }
+    const k = Math.min(1, scT/50);
+    const e = 1 - Math.pow(1-k, 3);
+    pikachu.x = -140 + (pikachu.baseX + 140) * e;
+    charizard.x = W + 180 - (W + 180 - charizard.baseX) * e;
+    if (k >= 1 && scT === 52) {
+      shake(16); flash('#fff', 8); SFX.hit();
+      spawn(40, { x: pikachu.x, y: GROUND, color: '#a08055', speed: 5, life: 30, size: 8, g: 0.15 });
+      spawn(40, { x: charizard.x, y: GROUND, color: '#a08055', speed: 5, life: 30, size: 8, g: 0.15 });
+      cam.zoom = 1.12;
+    }
+    if (scT > 70) setScene('faceoff');
+  },
+  faceoff() {
+    cam.zoom += (1.18 - cam.zoom)*0.02;
+    // slow push-in, breathing tension, sparks between them
+    if (scT === 1) callout('⚡ PIKACHU', '#ffe14d');
+    if (scT === 46) callout('🔥 CHARIZARD', '#ff7a3c');
+    if (scT > 0 && scT % 9 === 0) {
+      const mx = (pikachu.x + charizard.x)/2 + (Math.random()-0.5)*60;
+      spawn(2, { x: mx, y: GROUND - 40 - Math.random()*80, color: Math.random()<0.5 ? '#ffe97a' : '#ff9a4d', speed: 1.5, life: 26, size: 3, glow: true });
+    }
+    if (scT === 92) { cam.zoom = 1.05; setScene('atk1'); }
+  },
+  atk1() {
+    // Charizard: flamethrower
+    if (scT === 1) callout('FLAMETHROWER!', '#ff8c42');
+    if (scT >= 10 && scT < 70) {
+      charizard.charge = Math.min(1, charizard.charge + 0.08);
+      if (scT === 11) SFX.charge();
+    }
+    if (scT === 70) {
+      SFX.flame(); shake(8);
+      beams.push({ type: 'flame', x: charizard.x - 70*charizard.facing, y: charizard.y - 108, tx: pikachu.x, ty: pikachu.y - 60, t: 0, dur: 46 });
+    }
+    if (scT === 108) {
+      // pikachu dodges — quick hop
+      pikachu.vy = -13; pikachu.vx = 7; pikachu.onGround = false;
+      SFX.zap();
+    }
+    if (scT > 140) setScene('atk2');
+  },
+  atk2() {
+    // Pikachu: 100,000 volts
+    if (scT === 1) callout('100,000 VOLTS!', '#ffe14d');
+    if (scT >= 8 && scT < 78) {
+      pikachu.charge = Math.min(1, (scT-8)/70);
+      if (scT === 9) SFX.charge();
+      // crackling arcs off the cheeks
+      if (scT % 6 === 0 && pikachu.charge > 0.4) {
+        makeBolt(pikachu.x + 20, pikachu.y - 55, pikachu.x + (Math.random()-0.5)*220, pikachu.y - 60 - Math.random()*140, Math.random()<0.5);
+      }
+    }
+    if (scT === 78) {
+      SFX.zap(); SFX.thunder(); shake(14); flash('#eaffff', 12);
+      beams.push({ type: 'bolt', x: pikachu.x + 30, y: pikachu.y - 62, tx: charizard.x, ty: charizard.y - 70, t: 0, dur: 40 });
+      for (let i = 0; i < 6; i++) makeBolt(pikachu.x + 30, pikachu.y - 62, pikachu.x + 200 + Math.random()*300, pikachu.y - 150 - Math.random()*200, true);
+    }
+    if (scT === 110) {
+      charizard.hitT = 14; charizard.vx = -9; shake(10); SFX.hit();
+      spawn(30, { x: charizard.x, y: charizard.y - 70, color: '#ffcf6a', speed: 5, life: 30, size: 5, g: 0.12, glow: true });
+      callout('DIRECT HIT!', '#ff5a3c');
+    }
+    if (scT > 160) setScene('atk3');
+  },
+  atk3() {
+    // Charizard retaliates — bigger fire
+    if (scT === 1) callout('FIRE BLAST!', '#ff4d1a');
+    if (scT >= 8 && scT < 68) { charizard.charge = Math.min(1, (scT-8)/60); if (scT === 9) { SFX.charge(); SFX.roar(); } }
+    if (scT === 68) {
+      SFX.flame(); shake(10);
+      beams.push({ type: 'flame', x: charizard.x - 70, y: charizard.y - 108, tx: pikachu.x, ty: pikachu.y - 60, t: 0, dur: 50 });
+    }
+    if (scT === 112) {
+      pikachu.hitT = 14; pikachu.vx = 8; pikachu.vy = -6; pikachu.onGround = false;
+      shake(10); SFX.hit();
+      spawn(30, { x: pikachu.x, y: pikachu.y - 55, color: '#ffb347', speed: 5, life: 30, size: 5, g: 0.12, glow: true });
+      callout('Pikachu gets scorched!', '#ff8c42');
+    }
+    if (scT > 155) setScene('clash');
+  },
+  clash() {
+    // both charge ultimate — storm converges
+    cam.zoom += (1.28 - cam.zoom)*0.03;
+    if (scT === 1) callout('THE STORM CONVERGES', '#b8c8ff');
+    if (scT >= 10 && scT < 150) {
+      pikachu.charge = Math.min(1, (scT-10)/140);
+      charizard.charge = Math.min(1, (scT-10)/140);
+      if (scT === 11) SFX.charge();
+      if (scT % 5 === 0) {
+        makeBolt(pikachu.x, pikachu.y - 80, pikachu.x + (Math.random()-0.5)*300, pikachu.y - 180 - Math.random()*160, Math.random()<0.6);
+        spawn(4, { x: charizard.x, y: charizard.y - 120, color: '#ff8c2a', speed: 2, life: 40, size: 6, g: -0.03, glow: true });
+        spawn(2, { x: Math.random()*W, y: -10, color: '#9fd8ff', speed: 6, vy: 8, life: 40, size: 3, g: 0.05, glow: true }); // falling sky-sparks
+      }
+    }
+    if (scT >= 150 && scT < 158) { // whiteout
+      flash('#ffffff', 26);
+    }
+    if (scT === 150) { SFX.clash(); SFX.thunder(); shake(30); }
+    if (scT === 156) {
+      // THE CLASH — everything at once
+      beams.push({ type: 'bolt',  x: pikachu.x + 40, y: pikachu.y - 64, tx: (pikachu.x+charizard.x)/2, ty: pikachu.y - 90, t: 0, dur: 55 });
+      beams.push({ type: 'flame', x: charizard.x - 70, y: charizard.y - 110, tx: (pikachu.x+charizard.x)/2, ty: charizard.y - 100, t: 0, dur: 55 });
+      for (let i = 0; i < 10; i++) makeBolt((pikachu.x+charizard.x)/2, pikachu.y - 90, (pikachu.x+charizard.x)/2 + (Math.random()-0.5)*500, pikachu.y - 90 + (Math.random()-0.5)*400, true);
+      spawn(120, { x: (pikachu.x+charizard.x)/2, y: pikachu.y - 90, color: Math.random()<0.5 ? '#ffe97a' : '#ff8c2a', speed: 8, life: 50, size: 6, g: 0.08, glow: true });
+      callout('⚡⚡⚡ CLASH ⚡⚡⚡', '#ffffff');
+    }
+    if (scT > 230) setScene('finale');
+  },
+  finale() {
+    if (scT === 1) {
+      cam.zoom = 1.4; cam.shake = 6;
+      // pikachu standing, charizard down
+      charizard.koT = 1; charizard.charge = 0; charizard.facing = -1;
+      pikachu.charge = 0;
+    }
+    if (scT > 60) { cam.zoom += (1.1 - cam.zoom)*0.03; }
+    if (scT === 90) { callout('THE STORM PREVAILS', '#ffe14d'); SFX.win(); }
+    if (scT > 150) showEnd();
+  }
+};
+
+function showEnd() {
+  if (scene === 'end') return;
+  setScene('end');
+  document.getElementById('endcard').classList.add('show');
+}
+
+/* ============================== PHYSICS (hit knockback / gravity) ============================== */
+function updateFighter(f, t) {
+  if (f.onGround) { f.x += f.vx; f.vx *= 0.82; }
+  else {
+    f.x += f.vx; f.y += f.vy; f.vy += 0.55;
+    if (f.y >= f.baseY) {
+      f.y = f.baseY; f.onGround = true; f.vy = 0;
+      spawn(14, { x: f.x, y: f.y, color: '#8a6a48', speed: 3.5, life: 22, size: 5, g: 0.12 });
+      shake(4);
+    }
+  }
+  f.x = Math.max(60, Math.min(W-60, f.x));
+  if (f.hitT > 0) f.hitT--;
+  if (scene !== 'clash' && scene !== 'atk1' && scene !== 'atk2' && scene !== 'atk3') {
+    // ease charge down when idle
+    f.charge *= 0.96;
+  }
+}
+
+/* ============================== RENDER ============================== */
+function render(t) {
+  frame++;
+  scT++;
+
+  // camera
+  cam.shake *= 0.88; cam.flash = Math.max(0, cam.flash - 1);
+  const sx = (Math.random()-0.5)*cam.shake, sy = (Math.random()-0.5)*cam.shake;
+
+  ctx.setTransform(1,0,0,1,0,0);
+  ctx.clearRect(0,0,W,H);
+  ctx.save();
+  const z = cam.zoom;
+  ctx.translate(W/2 + sx, H/2 + sy);
+  ctx.scale(z, z);
+  ctx.translate(-W/2, -H/2);
+
+  drawSky(t);
+
+  // scene logic
+  if (F[scene]) F[scene]();
+  updateFighter(pikachu, t);
+  updateFighter(charizard, t);
+  updateParticles();
+
+  // draw fighters (farther one first — pikachu smaller)
+  if (scene === 'title') {
+    // ambient only during title (fighters hidden behind card)
+  } else {
+    drawCharizard(t, charizard);
+    drawPikachu(t, pikachu);
+  }
+
+  drawBeams(t);
+  drawParticles();
+  drawBolts();
+
+  ctx.restore();
+
+  // flash overlay
+  if (cam.flash > 0) {
+    ctx.globalAlpha = Math.min(1, cam.flash/20) * 0.85;
+    ctx.fillStyle = cam.flashColor;
+    ctx.fillRect(0,0,W,H);
+    ctx.globalAlpha = 1;
+  }
+
+  // vignette
+  const vg = ctx.createRadialGradient(W/2, H/2, H*0.42, W/2, H/2, H*0.85);
+  vg.addColorStop(0, 'rgba(0,0,0,0)');
+  vg.addColorStop(1, 'rgba(0,0,0,0.5)');
+  ctx.fillStyle = vg; ctx.fillRect(0,0,W,H);
+
+  // film grain flicker
+  if (frame % 2 === 0) {
+    ctx.globalAlpha = 0.035;
+    ctx.fillStyle = '#fff';
+    for (let i = 0; i < 14; i++) ctx.fillRect(Math.random()*W, Math.random()*H, Math.random()*3+1, Math.random()*3+1);
+    ctx.globalAlpha = 1;
+  }
+
+  requestAnimationFrame(render);
+}
+
+/* ============================== UI WIRING ============================== */
+const stage = document.getElementById('stage');
+function begin() {
+  audio();
+  document.getElementById('title-card').style.opacity = '0';
+  setTimeout(() => document.getElementById('title-card').style.display = 'none', 1600);
+  stage.classList.add('bars-open');
+  resetFighters();
+  setScene('intro');
+  SFX.thunder();
+}
+document.getElementById('btn-begin').addEventListener('click', begin);
+document.getElementById('btn-again').addEventListener('click', () => {
+  document.getElementById('endcard').classList.remove('show');
+  resetFighters();
+  setScene('intro');
+});
+document.getElementById('mute').addEventListener('click', e => {
+  muted = !muted;
+  e.target.textContent = muted ? '🔇' : '🔊';
+});
+cv.addEventListener('pointerdown', () => audio());
+
+requestAnimationFrame(render);
+})();
+</script>
+</body>
+</html>
